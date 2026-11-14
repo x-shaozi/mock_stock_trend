@@ -1,0 +1,4 @@
+[run]
+# SQLAlchemy 的异步数据库操作会在内部切换 greenlet。
+# 显式告诉 coverage.py 这一点，避免它在切换时漏记实际执行过的代码。
+concurrency = greenlet
