@@ -55,8 +55,16 @@ HTTP 错误使用统一的 `code`、`message` 格式；参数错误还包含 `er
 .venv\Scripts\python -m ruff format --check .
 ```
 
+如需查看测试覆盖了多少应用代码，先安装 `requirements-dev.txt`，再从项目根目录运行：
+
+```powershell
+.venv\Scripts\python -m pytest tests -v -rs --cov=app --cov-report=term-missing
+```
+
+`--cov=app` 只统计 `app/` 下的应用代码，不把测试文件算入分母；`term-missing` 会显示各文件的覆盖比例和未执行行号。没有配置 `--cov-fail-under`，所以覆盖率数字暂时只供观察，不会让 CI 因百分比不足而失败。覆盖率高表示代码行曾被执行，不代表结果一定正确。本地若未显式配置隔离 MySQL 测试库，数据库集成测试会跳过，此时的覆盖率不能与远程 CI 的完整测试结果直接比较。
+
 ## 远程检查
 
-GitHub Actions 在推送代码或提交合并请求后，分别用 Python 3.11 和 3.14 运行 Ruff 与测试。每个任务会启动临时 MySQL 8，先在隔离测试库执行 Alembic 迁移，再运行包含数据库集成测试的完整测试集；不会连接本机的学习库，也不需要行情网站的个人密钥。
+GitHub Actions 在推送代码或提交合并请求后，分别用 Python 3.11 和 3.14 运行 Ruff、测试和覆盖率统计。每个任务会启动临时 MySQL 8，先在隔离测试库执行 Alembic 迁移，再运行包含数据库集成测试的完整测试集；不会连接本机的学习库，也不需要行情网站的个人密钥。
 
 首次运行前，在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中创建名为 `CI_MYSQL_PASSWORD` 的 Repository secret，填入专门用于 CI 的随机密码。工作流只通过环境变量读取它，不把密码写进仓库。测试库名固定为 `stock_ci_test`，基础名称为 `stock_ci`，满足测试夹具要求的“基础名称加 `_test`”。远程是否真正通过，应在仓库 **Actions** 页面分别查看两个 Python 版本的日志；工作流文件存在不代表运行已经成功。

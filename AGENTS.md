@@ -58,7 +58,7 @@
 - 普通 Session 回滚不一定能撤销业务代码已提交的事务；测试夹具应使用经过验证的外层事务与保存点，或其他可靠的隔离方式。
 - Alembic 离线 SQL 测试只能验证生成的 SQL；需要验证实际表、索引和约束时，应在隔离测试库执行在线迁移。MySQL DDL 不应假定可以通过普通事务回滚。
 - 使用 FastAPI `dependency_overrides` 的测试，结束后必须恢复原有依赖配置。需要应用 lifespan 的测试，应正确初始化和清理生命周期资源。
-- 关键业务逻辑的测试覆盖率目标不低于 80%。在配置覆盖率统计工具、确定统计范围和建立基线之前，不得声称该目标已经验证，也不将其作为现有 CI 门禁。
+- 关键业务逻辑的测试行覆盖率目标不低于 80%。统计范围为 `app/`；先依据包含隔离 MySQL 集成测试的完整运行建立基线，再评估具体门槛。当前 CI 只显示覆盖率报告，不用 `--cov-fail-under` 阻断提交；覆盖率不能代替测试断言和业务验收。
 - 不得通过删除失败测试、随意修改预期结果、大范围添加 `noqa` 或 `type: ignore`、降低检查标准来制造检查通过的结果。
 - 完成代码修改后，按变更范围运行相关测试，并执行现有质量检查；如实报告通过、失败、跳过及未执行的检查。
 
@@ -67,8 +67,9 @@
 - `python -m ruff check .`
 - `python -m ruff format --check .`
 - `python -m pytest tests -v`
+- `python -m pytest tests -v -rs --cov=app --cov-report=term-missing`（覆盖率报告；完整基线需启用隔离 MySQL 测试库）
 
-项目已有使用 AnyIO 和独立 MySQL 测试库的集成测试；仓库的 GitHub Actions 工作流已声明临时 MySQL 服务、测试库迁移及 `MYSQL_TEST_DATABASE`，实际远程运行结果须以 Actions 日志为准。其他环境若未设置 `MYSQL_TEST_DATABASE`，相关集成测试会跳过。Pyright、pytest-cov 和安全扫描可按实际需求逐步引入；只有在依赖、配置及 CI 均已落地后，才将相应检查列为必须通过的门禁。
+项目已有使用 AnyIO 和独立 MySQL 测试库的集成测试；仓库的 GitHub Actions 工作流已声明临时 MySQL 服务、测试库迁移及 `MYSQL_TEST_DATABASE`，实际远程运行结果须以 Actions 日志为准。其他环境若未设置 `MYSQL_TEST_DATABASE`，相关集成测试会跳过。`pytest-cov` 已列入开发依赖，仅用于生成报告；Pyright 和安全扫描可按实际需求逐步引入。只有在依赖、配置及 CI 均已落地后，才将相应检查列为必须通过的门禁。
 
 ## 验证与交付
 

@@ -65,4 +65,5 @@ jobs:
       - name: 检查格式
         run: python -m ruff format --check .
       - name: 运行测试
-        run: python -m pytest tests -v -rs
+        # 先显示真实覆盖率基线；尚未约定阈值，不使用 --cov-fail-under。
+        run: python -m pytest tests -v -rs --cov=app --cov-report=term-missing
