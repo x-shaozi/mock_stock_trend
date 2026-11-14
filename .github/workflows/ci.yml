@@ -67,3 +67,37 @@ jobs:
       - name: 运行测试
         # 先显示真实覆盖率基线；尚未约定阈值，不使用 --cov-fail-under。
         run: python -m pytest tests -v -rs --cov=app --cov-report=term-missing
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - name: 安装项目指定的 pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.0.0
+      - name: 安装 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: 按锁文件安装前端依赖
+        run: pnpm install --frozen-lockfile
+      - name: 从 OpenAPI 生成前端类型
+        run: pnpm gen:api
+      - name: 确认生成类型与 OpenAPI 同步
+        run: git diff --exit-code -- src/api/generated/schema.d.ts
+      - name: 检查前端代码
+        run: pnpm lint
+      - name: 检查前端类型
+        run: pnpm typecheck
+      - name: 运行前端测试
+        run: pnpm test
+      - name: 检查前端格式
+        run: pnpm format:check
+      - name: 构建前端
+        run: pnpm build
