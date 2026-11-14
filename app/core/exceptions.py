@@ -7,6 +7,14 @@ from starlette.exceptions import HTTPException
 from app.schemas.api_response import APIResponse, ValidationIssue
 
 
+class BusinessHTTPException(HTTPException):
+    """带稳定业务标识的 HTTP 错误，保留既有 detail 文本和状态码。"""
+
+    def __init__(self, *, status_code: int, error_code: str, message: str) -> None:
+        super().__init__(status_code=status_code, detail=message)
+        self.error_code = error_code
+
+
 async def handle_http_error(request: Request, exc: HTTPException) -> JSONResponse:
     """将已知 HTTP 错误转换为统一格式。"""
     default_messages = {
@@ -18,7 +26,8 @@ async def handle_http_error(request: Request, exc: HTTPException) -> JSONRespons
         message = default_messages.get((exc.status_code, message), message)
     else:
         message = "请求失败"
-    response = APIResponse(code=exc.status_code, message=message)
+    error_code = exc.error_code if isinstance(exc, BusinessHTTPException) else None
+    response = APIResponse(code=exc.status_code, message=message, error_code=error_code)
     return JSONResponse(
         status_code=exc.status_code,
         content=response.model_dump(exclude_none=True),

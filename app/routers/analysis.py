@@ -3,8 +3,9 @@
 from datetime import timezone
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Path, Query, Response
 
+from app.core.exceptions import BusinessHTTPException
 from app.dependencies import AnalysisServiceDep
 from app.schemas.analysis import (
     AnalysisResultItem,
@@ -45,7 +46,9 @@ async def list_analysis_runs(
             stock_id=stock_id, page=query.page, page_size=query.page_size
         )
     except AnalysisStockNotFound:
-        raise HTTPException(status_code=404, detail="股票不存在") from None
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from None
 
     return AnalysisRunListResponse(
         stock_id=stock.id,
@@ -86,7 +89,11 @@ async def get_analysis_run(
     try:
         run = await service.get_run(stock_id, run_id)
     except AnalysisRunNotFound:
-        raise HTTPException(status_code=404, detail="分析批次不存在") from None
+        raise BusinessHTTPException(
+            status_code=404,
+            error_code="ANALYSIS_RUN_NOT_FOUND",
+            message="分析批次不存在",
+        ) from None
 
     # MySQL 会话已统一为 UTC，但 TIMESTAMP 读取后没有时区标记；补上 UTC，
     # 避免客户端把 computed_at 误认为自己电脑的当地时间。
@@ -132,20 +139,26 @@ async def create_analysis_run(
     try:
         outcome = await service.run(stock_id, body.days)
     except AnalysisStockNotFound:
-        raise HTTPException(status_code=404, detail="股票不存在") from None
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from None
     except AnalysisStockArchived:
-        raise HTTPException(
-            status_code=409, detail="已归档股票不可发起新分析"
+        raise BusinessHTTPException(
+            status_code=409,
+            error_code="STOCK_ARCHIVED",
+            message="已归档股票不可发起新分析",
         ) from None
     except AnalysisDataInsufficient as exc:
-        raise HTTPException(
+        raise BusinessHTTPException(
             status_code=409,
-            detail=f"已存日线不足：需要{exc.requested}条，当前{exc.available}条",
+            error_code="INSUFFICIENT_HISTORY",
+            message=f"已存日线不足：需要{exc.requested}条，当前{exc.available}条",
         ) from exc
     except AnalysisPriceBasisConflict:
-        raise HTTPException(
+        raise BusinessHTTPException(
             status_code=409,
-            detail="已存日线的来源、调整方式或币种不一致，请先核对行情",
+            error_code="PRICE_BASIS_CONFLICT",
+            message="已存日线的来源、调整方式或币种不一致，请先核对行情",
         ) from None
 
     # 首次保存产生新资源，重复请求则重算同一批次并保留原编号。

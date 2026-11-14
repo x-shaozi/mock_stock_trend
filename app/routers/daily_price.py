@@ -2,8 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Path, Query
 
+from app.core.exceptions import BusinessHTTPException
 from app.dependencies import PriceCollectionServiceDep, PriceHistoryServiceDep
 from app.repository.daily_price import PriceBasisConflict
 from app.schemas.api_response import APIResponse
@@ -36,7 +37,9 @@ async def list_daily_prices(
     try:
         stock, prices = await service.get_history(stock_id, query.days)
     except HistoryStockNotFound:
-        raise HTTPException(status_code=404, detail="股票不存在") from None
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from None
 
     return PriceHistoryResponse(
         stock_id=stock.id,
@@ -65,15 +68,25 @@ async def collect_daily_prices(
     try:
         result = await service.collect(stock_id, query.days)
     except CollectionStockNotFound as exc:
-        raise HTTPException(status_code=404, detail="股票不存在") from exc
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from exc
     except ArchivedStock as exc:
-        raise HTTPException(status_code=409, detail="已归档股票不可采集行情") from exc
+        raise BusinessHTTPException(
+            status_code=409,
+            error_code="STOCK_ARCHIVED",
+            message="已归档股票不可采集行情",
+        ) from exc
     except PriceBasisConflict as exc:
-        raise HTTPException(
-            status_code=409, detail="已有不同行情口径，不能覆盖"
+        raise BusinessHTTPException(
+            status_code=409,
+            error_code="PRICE_BASIS_CONFLICT",
+            message="已有不同行情口径，不能覆盖",
         ) from exc
     except MarketDataError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise BusinessHTTPException(
+            status_code=502, error_code="MARKET_DATA_UNAVAILABLE", message=str(exc)
+        ) from exc
     return PriceCollectionResponse(
         stock_id=result.stock_id,
         symbol=result.symbol,

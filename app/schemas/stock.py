@@ -1,6 +1,7 @@
 """股票新增、搜索、列表、归档与恢复接口使用的请求和响应模型。"""
 
 import re
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -57,6 +58,14 @@ class StockResponse(BaseModel):
     market: Literal["CN", "US"]
 
 
+class StockDetailResponse(StockResponse):
+    """按 ID 查询完整股票身份，以及归档状态和 UTC 时间。"""
+
+    status: Literal["active", "archived"]
+    created_at: datetime
+    archived_at: datetime | None
+
+
 class StockArchiveResponse(BaseModel):
     """归档成功后告诉调用方：哪只股票已处于归档状态。"""
 
@@ -80,10 +89,30 @@ class StockListQuery(BaseModel):
     status: Literal["active", "archived"] = Field(
         default="active", description="股票状态：active 正常，archived 已归档"
     )
+    market: Literal["CN", "US"] | None = Field(
+        default=None, description="可选市场筛选：CN 或 US"
+    )
+    keyword: str | None = Field(
+        default=None, max_length=50, description="本地股票代码或名称的包含匹配"
+    )
     page: int = Field(default=1, ge=1, description="页码，从 1 开始")
     page_size: int = Field(
         default=20, ge=1, le=100, description="每页条数，最多 100 条"
     )
+
+    @field_validator("market", mode="before")
+    @classmethod
+    def normalize_market(cls, value: object) -> object:
+        """可选市场条件与其他接口保持相同的大小写策略。"""
+        return value.strip().upper() if isinstance(value, str) else value
+
+    @field_validator("keyword", mode="before")
+    @classmethod
+    def normalize_keyword(cls, value: object) -> object:
+        """空搜索词等同于不筛选，先修剪空格再验证最大长度。"""
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
 
 
 class StockListResponse(BaseModel):

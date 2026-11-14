@@ -17,7 +17,7 @@ Copy-Item .env.example .env
 
 ## 选择要追踪的股票
 
-先调用 `GET /stocks/search?market=CN&query=688385`，也可以把 `query` 换成股票名称；美股把 `market` 改为 `US`。搜索只返回候选，不会写数据库。选中结果后，调用 `POST /stocks`，请求体只需提交搜索结果中的 `market` 和 `symbol`，例如 `{"market":"CN","symbol":"688385.SH"}`。服务端会再次核对代码并填写名称，然后把股票加入本地追踪列表。旧客户端仍可提交 `name`，但保存时使用股票目录中的名称。`GET /stocks` 查看已追踪股票。
+先调用 `GET /stocks/search?market=CN&query=688385`，也可以把 `query` 换成股票名称；美股把 `market` 改为 `US`。搜索只返回候选，不会写数据库。选中结果后，调用 `POST /stocks`，请求体只需提交搜索结果中的 `market` 和 `symbol`，例如 `{"market":"CN","symbol":"688385.SH"}`。服务端会再次核对代码并填写名称，然后把股票加入本地追踪列表。旧客户端仍可提交 `name`，但保存时使用股票目录中的名称。`GET /stocks` 查看已追踪股票，支持 `status=active|archived`、`market=CN|US`、`keyword=代码或名称` 和分页；关键词在数据库中执行包含匹配。详情页可使用 `GET /stocks/{stock_id}` 独立获取名称、市场、状态、创建时间与归档时间，其中两个时间字段为 UTC。
 
 已采集的日线可用 `GET /stocks/{stock_id}/prices?days=90` 查看。`stock_id` 是 `POST /stocks` 返回的编号；`days` 可填 1～260，默认 90。接口从数据库取最近的日线，按交易日从早到晚返回，不会再次联网采集；价格在 JSON 中是保留小数精度的字符串。尚未采集时返回空的 `items` 列表。
 
@@ -45,7 +45,7 @@ Copy-Item .env.example .env
 
 新增数据库表时，先按仓库约定取得人工确认，再编写模型和 Alembic 迁移；不要用 `create_all()` 在应用启动时直接改表。`stocks`、`daily_prices`、`analysis_runs`、`analysis_results` 四份建表迁移和 `stocks.archived_at` 字段迁移已在本地学习数据库执行；其他环境是否已迁移，应运行 `python -m alembic current` 查看。
 
-HTTP 错误使用统一的 `code`、`message` 格式；参数错误还包含 `errors`。日志默认输出到标准错误流，使用 `LOG_LEVEL` 环境变量调整级别。所有数据库、Redis 和外部接口等 I/O 密集型操作均按 `AGENTS.md` 使用异步接口。应用的异步 MySQL 连接在建立时将会话时区设为 UTC；`trade_date` 仍是交易所当地日期。
+HTTP 错误继续使用统一的 `code`、`message` 格式；明确的业务异常额外包含可选 `error_code`，例如 `STOCK_NOT_FOUND`、`STOCK_ALREADY_EXISTS`、`STOCK_ARCHIVED`、`INSUFFICIENT_HISTORY`、`PRICE_BASIS_CONFLICT`。普通 404 和参数校验错误仍保持原结构；参数错误还包含 `errors`。详见 `docs/前端P1接口增强说明.md`。日志默认输出到标准错误流，使用 `LOG_LEVEL` 环境变量调整级别。所有数据库、Redis 和外部接口等 I/O 密集型操作均按 `AGENTS.md` 使用异步接口。应用的异步 MySQL 连接在建立时将会话时区设为 UTC；`trade_date` 仍是交易所当地日期。
 
 ## 检查
 

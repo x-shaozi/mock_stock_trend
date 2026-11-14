@@ -68,24 +68,38 @@ def test_invalid_parameters_return_422_without_calling_service(
 
 
 @pytest.mark.parametrize(
-    ("error", "status", "message"),
+    ("error", "status", "message", "error_code"),
     [
-        (CollectionStockNotFound(), 404, "股票不存在"),
-        (ArchivedStock(), 409, "已归档股票不可采集行情"),
-        (PriceBasisConflict(), 409, "已有不同行情口径，不能覆盖"),
+        (CollectionStockNotFound(), 404, "股票不存在", "STOCK_NOT_FOUND"),
+        (ArchivedStock(), 409, "已归档股票不可采集行情", "STOCK_ARCHIVED"),
+        (
+            PriceBasisConflict(),
+            409,
+            "已有不同行情口径，不能覆盖",
+            "PRICE_BASIS_CONFLICT",
+        ),
         (
             MarketDataError("行情网站请求失败，请稍后重试"),
             502,
             "行情网站请求失败，请稍后重试",
+            "MARKET_DATA_UNAVAILABLE",
         ),
     ],
 )
 def test_collect_business_errors_use_common_response(
-    collection_service: AsyncMock, error: Exception, status: int, message: str
+    collection_service: AsyncMock,
+    error: Exception,
+    status: int,
+    message: str,
+    error_code: str,
 ) -> None:
-    """业务异常统一转换为 code 与 message，不泄漏异常堆栈。"""
+    """业务异常统一转换为稳定标识与原消息，不泄漏异常堆栈。"""
     collection_service.collect.side_effect = error
     with TestClient(app) as client:
         response = client.post("/stocks/4/prices/collect?days=2")
     assert response.status_code == status
-    assert response.json() == {"code": status, "message": message}
+    assert response.json() == {
+        "code": status,
+        "message": message,
+        "error_code": error_code,
+    }

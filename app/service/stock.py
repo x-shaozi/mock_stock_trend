@@ -14,14 +14,33 @@ class StockService:
     def __init__(self, repository: StockRepository) -> None:
         self._repository = repository
 
+    async def get_stock(self, stock_id: int) -> Stock:
+        """返回正常或已归档股票的基本信息，不隐式排除归档记录。"""
+        stock = await self._repository.get_by_id(stock_id)
+        if stock is None:
+            raise StockNotFound
+        return stock
+
     async def list_stocks(
-        self, *, page: int, page_size: int, status: str
+        self,
+        *,
+        page: int,
+        page_size: int,
+        status: str,
+        market: str | None = None,
+        keyword: str | None = None,
     ) -> tuple[list[Stock], int]:
-        """计算页码，并让总数和当前页使用同一种股票状态。"""
+        """总数和当前页使用完全相同的状态、市场、关键词条件。"""
         offset = (page - 1) * page_size
-        total = await self._repository.count(status=status)
+        total = await self._repository.count(
+            status=status, market=market, keyword=keyword
+        )
         stocks = await self._repository.list_page(
-            offset=offset, limit=page_size, status=status
+            offset=offset,
+            limit=page_size,
+            status=status,
+            market=market,
+            keyword=keyword,
         )
         return stocks, total
 

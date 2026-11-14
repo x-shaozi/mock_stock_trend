@@ -15,4 +15,5 @@ class APIResponse(BaseModel):
 
     code: int = Field(title="HTTP 状态码")
     message: str = Field(title="错误信息")
+    error_code: str | None = Field(default=None, title="稳定的业务错误标识")
     errors: list[ValidationIssue] | None = Field(default=None, title="参数校验问题")

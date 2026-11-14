@@ -1,9 +1,11 @@
 """股票管理的 HTTP 路由。"""
 
+from datetime import timezone
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Path, Query
 
+from app.core.exceptions import BusinessHTTPException
 from app.dependencies import (
     StockRegistrationServiceDep,
     StockSearchServiceDep,
@@ -14,6 +16,7 @@ from app.schemas.stock import (
     StockArchiveResponse,
     StockCandidateResponse,
     StockCreate,
+    StockDetailResponse,
     StockListQuery,
     StockListResponse,
     StockResponse,
@@ -41,7 +44,9 @@ async def search_stocks(
     try:
         candidates = await service.search(query=query.query, market=query.market)
     except StockCatalogError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+        raise BusinessHTTPException(
+            status_code=502, error_code="STOCK_CATALOG_UNAVAILABLE", message=str(exc)
+        ) from None
     return StockSearchResponse(
         items=[StockCandidateResponse.model_validate(item) for item in candidates]
     )
@@ -57,13 +62,48 @@ async def list_stocks(
 ) -> StockListResponse:
     """返回所选状态的一页股票，以及该状态下的总条数。"""
     stocks, total = await service.list_stocks(
-        page=query.page, page_size=query.page_size, status=query.status
+        page=query.page,
+        page_size=query.page_size,
+        status=query.status,
+        market=query.market,
+        keyword=query.keyword,
     )
     return StockListResponse(
         items=[StockResponse.model_validate(stock) for stock in stocks],
         total=total,
         page=query.page,
         page_size=query.page_size,
+    )
+
+
+@router.get(
+    "/{stock_id}",
+    response_model=StockDetailResponse,
+    summary="按编号查询股票详情",
+    responses={404: {"model": APIResponse, "description": "股票不存在"}},
+)
+async def get_stock(
+    stock_id: Annotated[int, Path(ge=1)], service: StockServiceDep
+) -> StockDetailResponse:
+    """供详情页独立查询股票；已归档记录仍能打开详情。"""
+    try:
+        stock = await service.get_stock(stock_id)
+    except StockNotFound:
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from None
+    return StockDetailResponse(
+        id=stock.id,
+        symbol=stock.symbol,
+        name=stock.name,
+        market=stock.market,
+        status="archived" if stock.archived_at is not None else "active",
+        created_at=stock.created_at.replace(tzinfo=timezone.utc),  # noqa: UP017
+        archived_at=(
+            stock.archived_at.replace(tzinfo=timezone.utc)  # noqa: UP017
+            if stock.archived_at is not None
+            else None
+        ),
     )
 
 
@@ -88,13 +128,21 @@ async def add_stock(
         )
     except StockAlreadyExists as exc:
         # 已归档股票仍占用市场与代码的唯一组合，不能重复新增。
-        raise HTTPException(status_code=409, detail="该市场的股票代码已存在") from exc
+        raise BusinessHTTPException(
+            status_code=409,
+            error_code="STOCK_ALREADY_EXISTS",
+            message="该市场的股票代码已存在",
+        ) from exc
     except StockNotListed:
-        raise HTTPException(
-            status_code=404, detail="股票目录中找不到该市场的代码"
+        raise BusinessHTTPException(
+            status_code=404,
+            error_code="STOCK_NOT_LISTED",
+            message="股票目录中找不到该市场的代码",
         ) from None
     except StockCatalogError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+        raise BusinessHTTPException(
+            status_code=502, error_code="STOCK_CATALOG_UNAVAILABLE", message=str(exc)
+        ) from None
     return StockResponse.model_validate(stock)
 
 
@@ -111,7 +159,9 @@ async def archive_stock(
     try:
         stock = await service.archive_stock(stock_id)
     except StockNotFound as exc:
-        raise HTTPException(status_code=404, detail="股票不存在") from exc
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from exc
     return StockArchiveResponse(id=stock.id, symbol=stock.symbol, status="archived")
 
 
@@ -128,5 +178,7 @@ async def restore_stock(
     try:
         stock = await service.restore_stock(stock_id)
     except StockNotFound as exc:
-        raise HTTPException(status_code=404, detail="股票不存在") from exc
+        raise BusinessHTTPException(
+            status_code=404, error_code="STOCK_NOT_FOUND", message="股票不存在"
+        ) from exc
     return StockRestoreResponse(id=stock.id, symbol=stock.symbol, status="active")

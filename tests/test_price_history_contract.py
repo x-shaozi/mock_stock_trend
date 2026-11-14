@@ -99,7 +99,11 @@ def test_unknown_stock_returns_404(history_service: AsyncMock) -> None:
         response = client.get("/stocks/99999999/prices")
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票不存在"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
 
 
 @pytest.mark.parametrize(

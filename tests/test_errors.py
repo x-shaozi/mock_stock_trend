@@ -48,3 +48,28 @@ def test_internal_error_hides_exception_details() -> None:
 
     assert response.status_code == 500
     assert response.json() == {"code": 500, "message": "服务器内部错误"}
+
+
+def test_business_error_has_stable_code_without_changing_old_fields() -> None:
+    """业务错误增加 error_code；未知 HTTP 错误继续保持旧响应。"""
+    from app.core.exceptions import BusinessHTTPException
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+
+    @test_app.get("/business")
+    async def fail_business() -> None:
+        raise BusinessHTTPException(
+            status_code=409, error_code="STOCK_ARCHIVED", message="股票已归档"
+        )
+
+    with TestClient(test_app) as client:
+        response = client.get("/business")
+        missing = client.get("/missing")
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": 409,
+        "message": "股票已归档",
+        "error_code": "STOCK_ARCHIVED",
+    }
+    assert missing.json() == {"code": 404, "message": "资源不存在"}

@@ -294,7 +294,11 @@ async def test_archive_unknown_stock_returns_404_in_test_database(
         await connection.execute(select(func.count()).select_from(Stock))
     ).scalar_one()
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票不存在"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
     assert after == before
 
 
@@ -360,7 +364,11 @@ async def test_restore_unknown_stock_returns_404_in_test_database(
         await connection.execute(select(func.count()).select_from(Stock))
     ).scalar_one()
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票不存在"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
     assert after == before
 
 
@@ -393,7 +401,11 @@ async def test_duplicate_stock_returns_409_without_breaking_next_request(
 
     assert first.status_code == 201
     assert duplicate.status_code == 409
-    assert duplicate.json() == {"code": 409, "message": "该市场的股票代码已存在"}
+    assert duplicate.json() == {
+        "code": 409,
+        "message": "该市场的股票代码已存在",
+        "error_code": "STOCK_ALREADY_EXISTS",
+    }
     assert next_stock.status_code == 201
 
 
@@ -653,7 +665,11 @@ async def test_collect_archived_stock_never_calls_market_source(
         app.dependency_overrides.pop(get_market_data_client, None)
 
     assert response.status_code == 409
-    assert response.json() == {"code": 409, "message": "已归档股票不可采集行情"}
+    assert response.json() == {
+        "code": 409,
+        "message": "已归档股票不可采集行情",
+        "error_code": "STOCK_ARCHIVED",
+    }
     fake_market.fetch_daily_bars.assert_not_awaited()
     assert (
         await connection.execute(
@@ -685,7 +701,11 @@ async def test_collect_source_failure_does_not_save_prices(
         app.dependency_overrides.pop(get_market_data_client, None)
 
     assert response.status_code == 502
-    assert response.json() == {"code": 502, "message": "行情网站请求失败"}
+    assert response.json() == {
+        "code": 502,
+        "message": "行情网站请求失败",
+        "error_code": "MARKET_DATA_UNAVAILABLE",
+    }
     assert (
         await connection.execute(
             select(func.count())
@@ -757,3 +777,41 @@ async def test_price_history_empty_for_stock_without_collection(
     response = await client.get(f"/stocks/{created.json()['id']}/prices")
     assert response.status_code == 200
     assert response.json()["items"] == []
+
+
+@pytest.mark.anyio
+async def test_detail_and_local_filters_in_isolated_mysql(
+    stock_client: tuple[httpx.AsyncClient, AsyncConnection],
+) -> None:
+    """隔离 MySQL 验证详情、筛选与总数；无测试库时跳过。"""
+    client, _ = stock_client
+    first = await client.post("/stocks", json={"symbol": "TESTFILTERA", "market": "US"})
+    second = await client.post(
+        "/stocks", json={"symbol": "TESTFILTERB", "market": "US"}
+    )
+    assert first.status_code == second.status_code == 201
+    stock_id = first.json()["id"]
+
+    detail = await client.get(f"/stocks/{stock_id}")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == stock_id
+    assert detail.json()["status"] == "active"
+    assert detail.json()["created_at"].endswith("Z")
+
+    filtered = await client.get("/stocks?market=us&keyword=filtera")
+    assert filtered.status_code == 200
+    assert filtered.json()["total"] == 1
+    assert filtered.json()["items"] == [first.json()]
+
+    assert (await client.patch(f"/stocks/{stock_id}/archive")).status_code == 200
+    archived = await client.get(f"/stocks/{stock_id}")
+    assert archived.status_code == 200
+    assert archived.json()["status"] == "archived"
+    assert archived.json()["archived_at"].endswith("Z")
+
+    only_archived = await client.get(
+        "/stocks?status=archived&market=US&keyword=FILTERA"
+    )
+    assert only_archived.status_code == 200
+    assert only_archived.json()["total"] == 1
+    assert only_archived.json()["items"] == [first.json()]

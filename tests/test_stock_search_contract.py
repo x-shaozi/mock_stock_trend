@@ -89,4 +89,5 @@ def test_search_source_failure_returns_502(search_service: AsyncMock) -> None:
     assert response.json() == {
         "code": 502,
         "message": "股票搜索服务请求超时，请稍后重试",
+        "error_code": "STOCK_CATALOG_UNAVAILABLE",
     }

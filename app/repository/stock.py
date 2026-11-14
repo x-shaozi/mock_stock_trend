@@ -1,6 +1,6 @@
 """股票基础信息的数据库操作。"""
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -56,22 +56,53 @@ class StockRepository:
             return Stock.archived_at.is_not(None)
         raise ValueError(f"不支持的股票状态：{status}")
 
-    async def count(self, *, status: str) -> int:
-        """只统计所选状态的股票，作为当前列表的 total。"""
-        statement = (
-            select(func.count())
-            .select_from(Stock)
-            .where(self._status_condition(status))
+    @classmethod
+    def _list_conditions(
+        cls, *, status: str, market: str | None, keyword: str | None
+    ) -> list[ColumnElement[bool]]:
+        """列表和 total 共享同一套 WHERE 条件。"""
+        conditions = [cls._status_condition(status)]
+        if market is not None:
+            conditions.append(Stock.market == market)
+        if keyword:
+            # 用户输入的 %、_ 是字面字符，使用 ! 转义并保留 ! 本身。
+            escaped = keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            pattern = f"%{escaped}%"
+            conditions.append(
+                or_(
+                    Stock.symbol.ilike(pattern, escape="!"),
+                    Stock.name.ilike(pattern, escape="!"),
+                )
+            )
+        return conditions
+
+    async def count(
+        self, *, status: str, market: str | None = None, keyword: str | None = None
+    ) -> int:
+        """用与实际分页完全相同的过滤条件计算总条数。"""
+        conditions = self._list_conditions(
+            status=status, market=market, keyword=keyword
         )
+        statement = select(func.count()).select_from(Stock).where(*conditions)
         result = await self._session.execute(statement)
         return result.scalar_one()
 
-    async def list_page(self, *, offset: int, limit: int, status: str) -> list[Stock]:
-        """按状态取一页股票，同一状态中仍让较新的记录排在前面。"""
-        # id 是自增主键；显式排序可让翻页结果有确定的顺序。
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        status: str,
+        market: str | None = None,
+        keyword: str | None = None,
+    ) -> list[Stock]:
+        """在数据库中筛选后分页，并按主键倒序提供稳定结果。"""
+        conditions = self._list_conditions(
+            status=status, market=market, keyword=keyword
+        )
         statement = (
             select(Stock)
-            .where(self._status_condition(status))
+            .where(*conditions)
             .order_by(Stock.id.desc())
             .offset(offset)
             .limit(limit)

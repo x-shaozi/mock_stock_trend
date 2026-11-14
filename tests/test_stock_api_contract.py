@@ -76,7 +76,11 @@ def test_duplicate_stock_returns_unified_409(registration_service: AsyncMock) ->
         )
 
     assert response.status_code == 409
-    assert response.json() == {"code": 409, "message": "该市场的股票代码已存在"}
+    assert response.json() == {
+        "code": 409,
+        "message": "该市场的股票代码已存在",
+        "error_code": "STOCK_ALREADY_EXISTS",
+    }
 
 
 def test_invalid_stock_does_not_reach_service(
@@ -103,7 +107,11 @@ def test_missing_catalog_symbol_returns_404(registration_service: AsyncMock) -> 
         response = client.post("/stocks", json={"symbol": "APPL", "market": "US"})
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票目录中找不到该市场的代码"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票目录中找不到该市场的代码",
+        "error_code": "STOCK_NOT_LISTED",
+    }
 
 
 def test_catalog_failure_returns_502(registration_service: AsyncMock) -> None:
@@ -119,6 +127,7 @@ def test_catalog_failure_returns_502(registration_service: AsyncMock) -> None:
     assert response.json() == {
         "code": 502,
         "message": "股票搜索服务请求超时，请稍后重试",
+        "error_code": "STOCK_CATALOG_UNAVAILABLE",
     }
 
 
@@ -140,7 +149,7 @@ def test_list_stocks_returns_page_and_total(stock_service: AsyncMock) -> None:
         "page_size": 1,
     }
     stock_service.list_stocks.assert_awaited_once_with(
-        page=2, page_size=1, status="active"
+        page=2, page_size=1, status="active", market=None, keyword=None
     )
 
 
@@ -154,7 +163,7 @@ def test_list_stocks_uses_default_page(stock_service: AsyncMock) -> None:
     assert response.status_code == 200
     assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
     stock_service.list_stocks.assert_awaited_once_with(
-        page=1, page_size=20, status="active"
+        page=1, page_size=20, status="active", market=None, keyword=None
     )
 
 
@@ -168,7 +177,7 @@ def test_list_stocks_can_request_archived_items(stock_service: AsyncMock) -> Non
     assert response.status_code == 200
     assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 1}
     stock_service.list_stocks.assert_awaited_once_with(
-        page=1, page_size=1, status="archived"
+        page=1, page_size=1, status="archived", market=None, keyword=None
     )
 
 
@@ -217,7 +226,11 @@ def test_archive_missing_stock_returns_unified_404(stock_service: AsyncMock) -> 
         response = client.patch("/stocks/999999/archive")
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票不存在"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
 
 
 def test_archive_stock_rejects_invalid_id(stock_service: AsyncMock) -> None:
@@ -250,7 +263,11 @@ def test_restore_missing_stock_returns_unified_404(stock_service: AsyncMock) -> 
         response = client.patch("/stocks/999999/restore")
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "股票不存在"}
+    assert response.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
 
 
 def test_restore_stock_rejects_invalid_id(stock_service: AsyncMock) -> None:
@@ -261,3 +278,106 @@ def test_restore_stock_rejects_invalid_id(stock_service: AsyncMock) -> None:
     assert response.status_code == 422
     assert response.json()["errors"][0]["field"] == "path.stock_id"
     stock_service.restore_stock.assert_not_awaited()
+
+
+def test_get_stock_detail_includes_status_and_utc_timestamps(
+    stock_service: AsyncMock,
+) -> None:
+    """页面刷新能直接按 id 读取状态，UTC 时间使用 Z 后缀。"""
+    from datetime import datetime
+
+    stock_service.get_stock.return_value = SimpleNamespace(
+        id=7,
+        symbol="AAPL",
+        name="Apple Inc.",
+        market="US",
+        created_at=datetime(2026, 11, 14, 8, 30),
+        archived_at=None,
+    )
+    with TestClient(app) as client:
+        response = client.get("/stocks/7")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": 7,
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "market": "US",
+        "status": "active",
+        "created_at": "2026-11-14T08:30:00Z",
+        "archived_at": None,
+    }
+    stock_service.get_stock.assert_awaited_once_with(7)
+
+
+def test_get_archived_stock_is_still_visible(stock_service: AsyncMock) -> None:
+    """归档股票保留独立详情与归档时间。"""
+    from datetime import datetime
+
+    stock_service.get_stock.return_value = SimpleNamespace(
+        id=7,
+        symbol="AAPL",
+        name="Apple Inc.",
+        market="US",
+        created_at=datetime(2026, 11, 14, 8, 30),
+        archived_at=datetime(2026, 11, 15, 6, 0),
+    )
+    with TestClient(app) as client:
+        response = client.get("/stocks/7")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "archived"
+    assert response.json()["archived_at"] == "2026-11-15T06:00:00Z"
+
+
+def test_get_stock_missing_and_bad_id(stock_service: AsyncMock) -> None:
+    """不存在报业务 404，非法 path 先被框架校验为 422。"""
+    stock_service.get_stock.side_effect = StockNotFound
+    with TestClient(app) as client:
+        missing = client.get("/stocks/999999")
+        invalid = client.get("/stocks/0")
+
+    assert missing.status_code == 404
+    assert missing.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
+    assert invalid.status_code == 422
+    assert invalid.json()["errors"][0]["field"] == "path.stock_id"
+    stock_service.get_stock.assert_awaited_once_with(999999)
+
+
+def test_list_stocks_passes_optional_filters(stock_service: AsyncMock) -> None:
+    """输入市场和关键词后，Router 只转发经过 Pydantic 规范化的数据。"""
+    stock_service.list_stocks.return_value = ([], 0)
+    with TestClient(app) as client:
+        response = client.get("/stocks?market=us&keyword=%20aapl%20&page=2&page_size=5")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 2, "page_size": 5}
+    stock_service.list_stocks.assert_awaited_once_with(
+        page=2, page_size=5, status="active", market="US", keyword="aapl"
+    )
+
+
+def test_list_stocks_blank_keyword_is_ignored(stock_service: AsyncMock) -> None:
+    """只有空格的搜索输入等同不填写关键词。"""
+    stock_service.list_stocks.return_value = ([], 0)
+    with TestClient(app) as client:
+        response = client.get("/stocks?keyword=%20%20")
+
+    assert response.status_code == 200
+    stock_service.list_stocks.assert_awaited_once_with(
+        page=1, page_size=20, status="active", market=None, keyword=None
+    )
+
+
+@pytest.mark.parametrize("query", ["market=EU", "keyword=" + "x" * 51])
+def test_list_stocks_rejects_bad_filters(stock_service: AsyncMock, query: str) -> None:
+    """无效市场与超长关键词在执行 SQL 前返回 422。"""
+    with TestClient(app) as client:
+        response = client.get(f"/stocks?{query}")
+    assert response.status_code == 422
+    assert response.json()["code"] == 422
+    stock_service.list_stocks.assert_not_awaited()

@@ -257,11 +257,16 @@ async def test_analysis_requires_full_requested_history_and_valid_parameters(
     assert insufficient.json() == {
         "code": 409,
         "message": "已存日线不足：需要35条，当前34条",
+        "error_code": "INSUFFICIENT_HISTORY",
     }
     assert invalid.status_code == 422
     assert invalid.json()["errors"][0]["field"] == "body.days"
     assert missing.status_code == 404
-    assert missing.json() == {"code": 404, "message": "股票不存在"}
+    assert missing.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
     assert (
         await connection.execute(
             select(func.count())
@@ -338,7 +343,11 @@ async def test_archived_stock_cannot_create_analysis_run(
     )
     response = await client.post(f"/stocks/{stock_id}/analysis-runs", json={"days": 35})
     assert response.status_code == 409
-    assert response.json() == {"code": 409, "message": "已归档股票不可发起新分析"}
+    assert response.json() == {
+        "code": 409,
+        "message": "已归档股票不可发起新分析",
+        "error_code": "STOCK_ARCHIVED",
+    }
 
 
 @pytest.mark.anyio
@@ -488,7 +497,11 @@ async def test_read_saved_analysis_run_allows_archive_and_hides_other_stocks_run
     assert archived.status_code == 200
     assert archived.json()["saved"] == 35
     assert wrong_stock.status_code == missing_run.status_code == 404
-    assert wrong_stock.json() == {"code": 404, "message": "分析批次不存在"}
+    assert wrong_stock.json() == {
+        "code": 404,
+        "message": "分析批次不存在",
+        "error_code": "ANALYSIS_RUN_NOT_FOUND",
+    }
     assert missing_run.json() == wrong_stock.json()
     assert invalid_stock.status_code == invalid_run.status_code == 422
     assert invalid_stock.json()["errors"][0]["field"] == "path.stock_id"
@@ -598,7 +611,11 @@ async def test_list_analysis_runs_handles_empty_archive_missing_and_invalid_quer
         }
     )
     assert missing.status_code == 404
-    assert missing.json() == {"code": 404, "message": "股票不存在"}
+    assert missing.json() == {
+        "code": 404,
+        "message": "股票不存在",
+        "error_code": "STOCK_NOT_FOUND",
+    }
     assert invalid_stock.status_code == 422
     assert invalid_stock.json()["errors"][0]["field"] == "path.stock_id"
     assert invalid_page.status_code == invalid_size.status_code == 422

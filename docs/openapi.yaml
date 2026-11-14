@@ -129,6 +129,30 @@ paths:
           default: active
           title: Status
         description: 股票状态：active 正常，archived 已归档
+      - name: market
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - CN
+            - US
+            type: string
+          - type: 'null'
+          description: 可选市场筛选：CN 或 US
+          title: Market
+        description: 可选市场筛选：CN 或 US
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          description: 本地股票代码或名称的包含匹配
+          title: Keyword
+        description: 本地股票代码或名称的包含匹配
       - name: page
         in: query
         required: false
@@ -214,6 +238,46 @@ paths:
                 $ref: '#/components/schemas/APIResponse'
         '502':
           description: 股票搜索服务失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}:
+    get:
+      tags:
+      - 股票管理
+      summary: 按编号查询股票详情
+      description: 供详情页独立查询股票；已归档记录仍能打开详情。
+      operationId: get_stock_stocks__stock_id__get
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockDetailResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
           content:
             application/json:
               schema:
@@ -587,6 +651,11 @@ components:
         message:
           type: string
           title: 错误信息
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: 稳定的业务错误标识
         errors:
           anyOf:
           - items:
@@ -1101,6 +1170,50 @@ components:
       - market
       title: StockCreate
       description: 用户提交代码和市场；名称由服务端从股票目录重新核对。
+    StockDetailResponse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        symbol:
+          type: string
+          title: Symbol
+        name:
+          type: string
+          title: Name
+        market:
+          type: string
+          enum:
+          - CN
+          - US
+          title: Market
+        status:
+          type: string
+          enum:
+          - active
+          - archived
+          title: Status
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        archived_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Archived At
+      type: object
+      required:
+      - id
+      - symbol
+      - name
+      - market
+      - status
+      - created_at
+      - archived_at
+      title: StockDetailResponse
+      description: 按 ID 查询完整股票身份，以及归档状态和 UTC 时间。
     StockListResponse:
       properties:
         items:
