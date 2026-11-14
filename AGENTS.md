@@ -1,0 +1,83 @@
+# AGENTS.md
+
+## 项目指纹 (Project Fingerprint)
+- **技术栈**: Python 3.11+, FastAPI, SQLAlchemy 2.0, asyncmy, redis.asyncio, httpx.AsyncClient
+- **数据库**: MySQL 8.0
+- **依赖管理**: `requirements.txt` 与 `requirements-dev.txt`，通过 pip 安装
+- **项目结构**: 遵循 `app/` (核心代码), `tests/` (测试), `docs/` (文档) 的标准结构
+
+## 开始任务前
+
+- 先阅读与任务相关的代码、测试、接口文档和配置，以仓库实际状态为准；不得把规范中的示例功能或工具当作项目已实现的内容。
+- 明确本次任务的目标、受影响模块、接口或数据库兼容性，以及需要执行的验证。复杂改动先列出简短实施计划。
+- 只修改完成任务所需的文件；不得覆盖或清理与本次任务无关的已有改动。
+- 产品行为未明确时，先参考现有 API、文档和测试；仍无法确定时说明假设并向用户确认，不擅自改变公开接口或数据语义。
+- 只读分析任务不擅自安装依赖、修改文件、执行迁移或启动外部服务。
+
+## 生命周期管理
+
+项目通过 `app/main.py` 中的 FastAPI `lifespan` 创建共享的异步 Redis 客户端，并在退出时关闭。Redis 首次执行命令时才建立实际连接；`app/core/redis.py` 提供取客户端的函数，FastAPI 依赖声明集中在 `app/dependencies.py`。
+
+数据库会话由 `app/core/database.py` 中的 `get_session()` 按请求管理，依赖声明和服务组装位于 `app/dependencies.py`；异步 Engine 在模块导入时创建，并在 `lifespan` 退出时释放。每条新 MySQL 连接建立时执行 `SET time_zone = '+00:00'`，统一 `TIMESTAMP` 的 UTC 会话口径；交易日期 `DATE` 仍按交易所当地日期解释。
+
+## 开发常用命令 (Commands)
+- **安装依赖**: `pip install -r requirements.txt`
+- **启动开发服务器**: 在项目根目录运行 `python -m app.main`（自动重载）
+- **运行测试**: `pytest tests/ -v`
+- **代码检查**: `ruff check .`
+- **格式检查**: `ruff format --check .`
+- **数据库迁移**: 已配置 Alembic 异步迁移环境，仓库当前有 `stocks`、`daily_prices`、`analysis_runs`、`analysis_results` 四份建表迁移，以及一份 `stocks.archived_at` 字段迁移；本地 MySQL 学习库和隔离测试库均已执行这五份迁移。用 `python -m alembic current` 核对当前数据库版本；真实执行新的 `alembic upgrade head` 前，须取得对应阶段的人工确认
+
+## 架构与编码规范 (Styles & Patterns)
+- **编码风格**: 严格遵循 PEP 8，使用 `ruff format .` 格式化，并在提交前执行格式检查
+- **API规范**: 所有API路由必须使用Pydantic模型进行请求体验证
+- **依赖注入**: FastAPI 的 `Depends` 声明、依赖别名及 `repository → service` 组装集中在 `app/dependencies.py`；路由只依赖业务服务，业务服务只依赖仓储，只有仓储直接持有 `AsyncSession`。数据库与 Redis 资源的创建、释放函数仍分别保留在 `app/core/database.py` 和 `app/core/redis.py`。
+- **事务边界**：遵守现有数据库会话和提交机制；Router、Service、Repository 不得在同一次业务调用中各自无协调地提交事务。Repository 执行数据访问，Service 负责业务决策，Router 负责 HTTP 语义。
+- **异步会话**：不得在并发任务之间共享同一个 `AsyncSession`；请求结束后按现有依赖机制释放 Session 和连接。
+- **外部依赖**：调用外部行情接口等服务时，应按业务需要设置超时、明确重试边界并处理失败；不得无限重试或把依赖失败伪装为成功。
+- **全异步 I/O（强制）**: 项目中的数据库、Redis、外部行情接口、HTTP 请求、文件读写等 I/O 密集型任务一律采用异步实现，使用异步客户端和 `async/await`；路由、业务层、仓储层与采集层沿调用链保持异步。
+- **禁止阻塞事件循环**: 不得在异步调用链中执行同步数据库驱动、同步 HTTP 客户端、同步文件 I/O 或 `time.sleep()`。若第三方行情 SDK 只提供同步 I/O，应选择可用的异步接口、基于异步 HTTP 客户端实现适配器，或更换数据源；不得仅将同步调用包进 `async def` 当作异步实现。
+- **计算任务边界**: MA、RSI、MACD 等纯计算函数不因全异步 I/O 要求而改写为形式上的异步函数；耗时较长的计算应与处理请求的事件循环隔离。
+- **错误处理**: 使用 `app/schemas/api_response.py` 的 `APIResponse` 格式返回错误信息，统一处理器位于 `app/core/exceptions.py`
+- **日志**: 使用 `loguru` 记录日志，默认级别为 `INFO`，通过 `LOG_LEVEL` 环境变量配置
+
+## 智能体安全红线 (Hard Rules)
+- **只读目录**: **绝对禁止**修改 `app/core/security/` 目录下的任何文件；该目录尚未创建，规则对将来创建的文件同样有效。
+- **数据库模型**：`app/models/` 已存在；未经**明确**人工确认，不得新增或修改该目录下的数据库模型定义。
+- **命令限制**: 禁止执行 `rm -rf`、`dropdb` 等危险命令。
+- **密钥管理**: 严禁将任何密钥、Token 或密码写入代码或日志中，必须从环境变量读取。
+
+## 代码质量与测试
+
+- 开发依赖通过 `requirements-dev.txt` 和 pip 管理；当前使用 Ruff 进行代码检查与格式检查，使用 pytest 运行测试。优先复用现有配置和测试方式。
+- 新增或修改功能时，应编写或更新对应测试。修复 Bug 时，应先添加能够复现问题的回归测试。
+- 根据功能风险覆盖正常、边界和异常场景；测试必须验证有意义的结果，不能只调用代码或使用无意义的断言。
+- 核心业务规则优先编写快速、独立、可重复的单元测试。API 变更应测试状态码、参数校验和响应结构；涉及数据库约束或事务行为时，应使用隔离的测试数据库验证。
+- 单元测试不得依赖生产数据库、生产密钥或不稳定的真实外部接口。使用依赖替换或 Mock 时，测试结束后应恢复原始状态。
+- MySQL 集成测试必须显式指定隔离测试库；目标不明确时不得自动退回开发库或生产库。测试应清理自身产生的数据，不得依赖执行顺序。
+- 普通 Session 回滚不一定能撤销业务代码已提交的事务；测试夹具应使用经过验证的外层事务与保存点，或其他可靠的隔离方式。
+- Alembic 离线 SQL 测试只能验证生成的 SQL；需要验证实际表、索引和约束时，应在隔离测试库执行在线迁移。MySQL DDL 不应假定可以通过普通事务回滚。
+- 使用 FastAPI `dependency_overrides` 的测试，结束后必须恢复原有依赖配置。需要应用 lifespan 的测试，应正确初始化和清理生命周期资源。
+- 关键业务逻辑的测试覆盖率目标不低于 80%。在配置覆盖率统计工具、确定统计范围和建立基线之前，不得声称该目标已经验证，也不将其作为现有 CI 门禁。
+- 不得通过删除失败测试、随意修改预期结果、大范围添加 `noqa` 或 `type: ignore`、降低检查标准来制造检查通过的结果。
+- 完成代码修改后，按变更范围运行相关测试，并执行现有质量检查；如实报告通过、失败、跳过及未执行的检查。
+
+当前检查命令：
+
+- `python -m ruff check .`
+- `python -m ruff format --check .`
+- `python -m pytest tests -v`
+
+项目已有使用 AnyIO 和独立 MySQL 测试库的集成测试；仓库的 GitHub Actions 工作流已声明临时 MySQL 服务、测试库迁移及 `MYSQL_TEST_DATABASE`，实际远程运行结果须以 Actions 日志为准。其他环境若未设置 `MYSQL_TEST_DATABASE`，相关集成测试会跳过。Pyright、pytest-cov 和安全扫描可按实际需求逐步引入；只有在依赖、配置及 CI 均已落地后，才将相应检查列为必须通过的门禁。
+
+## 验证与交付
+
+- 根据实际改动范围先运行相关测试，再执行适用的现有质量检查；公开 API 变更还应核对 `docs/openapi.yaml` 和接口测试。
+- 修改数据库模型或迁移时，除遵守人工确认要求外，还应检查已有数据、兼容性和恢复方案；离线迁移测试不能替代必要的真实 MySQL 验证。
+- 完成后简要报告修改内容、测试变化、实际执行的检查及结果、未执行或跳过的验证，以及仍存在的风险。
+- 不得把未执行或跳过的检查报告为通过，也不得把局部测试通过描述为全部功能验收通过。
+
+## 代码审查要点 (Review Expectations)
+- 变更必须通过所有CI检查（测试、代码风格）。
+- 所有公开API的变更必须同步更新 `docs/openapi.yaml`。
+- 审查时需特别关注安全与性能问题（如N+1查询）。

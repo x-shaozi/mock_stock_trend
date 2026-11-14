@@ -1,0 +1,1197 @@
+openapi: 3.1.0
+info:
+  title: 模拟股票趋势 API
+  version: 0.1.0
+paths:
+  /:
+    get:
+      tags:
+      - 项目入口
+      summary: 查看 API 入口
+      description: 返回应用名称和入口地址；此请求不需要查询 MySQL 或 Redis。
+      operationId: home__get
+      responses:
+        '200':
+          description: 成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /health:
+    get:
+      tags:
+      - 健康检查
+      summary: 检查服务状态
+      description: 报告 HTTP 服务进程可用。
+      operationId: health_health_get
+      responses:
+        '200':
+          description: 成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/search:
+    get:
+      tags:
+      - 股票管理
+      summary: 按代码或名称搜索可追踪股票
+      description: 只返回外部目录中的候选项；用户选中后再调用新增接口。
+      operationId: search_stocks_stocks_search_get
+      parameters:
+      - name: market
+        in: query
+        required: true
+        schema:
+          enum:
+          - CN
+          - US
+          type: string
+          description: 股票市场：CN 或 US
+          title: Market
+        description: 股票市场：CN 或 US
+      - name: query
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 股票代码或名称
+          title: Query
+        description: 股票代码或名称
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSearchResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '502':
+          description: 股票搜索服务失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks:
+    get:
+      tags:
+      - 股票管理
+      summary: 查询股票列表
+      description: 返回所选状态的一页股票，以及该状态下的总条数。
+      operationId: list_stocks_stocks_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          enum:
+          - active
+          - archived
+          type: string
+          description: 股票状态：active 正常，archived 已归档
+          default: active
+          title: Status
+        description: 股票状态：active 正常，archived 已归档
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          description: 页码，从 1 开始
+          default: 1
+          title: Page
+        description: 页码，从 1 开始
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: 每页条数，最多 100 条
+          default: 20
+          title: Page Size
+        description: 每页条数，最多 100 条
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockListResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      tags:
+      - 股票管理
+      summary: 将选中的股票加入追踪列表
+      description: 按代码加入追踪列表，名称由业务层从外部目录核对后填写。
+      operationId: add_stock_stocks_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票目录中找不到该代码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '409':
+          description: 股票已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '502':
+          description: 股票搜索服务失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/archive:
+    patch:
+      tags:
+      - 股票管理
+      summary: 归档股票
+      description: 按股票编号归档；已有归档记录时直接返回成功。
+      operationId: archive_stock_stocks__stock_id__archive_patch
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockArchiveResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/restore:
+    patch:
+      tags:
+      - 股票管理
+      summary: 恢复已归档股票
+      description: 按股票编号恢复；已经正常的股票再次请求也返回成功。
+      operationId: restore_stock_stocks__stock_id__restore_patch
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockRestoreResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/prices:
+    get:
+      tags:
+      - 行情采集
+      summary: 查询已保存的日线
+      description: 按股票编号查询 MySQL，返回最近的已存日线，不访问行情网站。
+      operationId: list_daily_prices_stocks__stock_id__prices_get
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 260
+          minimum: 1
+          description: 最近多少条已存日线
+          default: 90
+          title: Days
+        description: 最近多少条已存日线
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistoryResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/prices/collect:
+    post:
+      tags:
+      - 行情采集
+      summary: 在线采集日线并入库
+      description: 采集调整后日线入库，并把业务错误转成统一响应。
+      operationId: collect_daily_prices_stocks__stock_id__prices_collect_post
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 260
+          minimum: 1
+          description: 最近多少条完整日线
+          default: 90
+          title: Days
+        description: 最近多少条完整日线
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceCollectionResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '409':
+          description: 股票已归档或行情口径冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '502':
+          description: 行情网站请求或响应失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/analysis-runs:
+    get:
+      tags:
+      - 趋势分析
+      summary: 查看股票已保存的分析批次
+      description: 分页列出已保存批次；选择 run_id 后可调用逐日结果接口。
+      operationId: list_analysis_runs_stocks__stock_id__analysis_runs_get
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          description: 页码，从 1 开始
+          default: 1
+          title: Page
+        description: 页码，从 1 开始
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: 每页条数，最多 100 条
+          default: 20
+          title: Page Size
+        description: 每页条数，最多 100 条
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunListResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      tags:
+      - 趋势分析
+      summary: 根据已存日线发起趋势分析
+      description: 只负责 HTTP 状态和响应；数据库查询、计算与保存由业务层协调。
+      operationId: create_analysis_run_stocks__stock_id__analysis_runs_post
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisRunRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '200':
+          description: 同条件重算已有批次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunResponse'
+        '404':
+          description: 股票不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '409':
+          description: 股票已归档、日线不足或价格口径不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /stocks/{stock_id}/analysis-runs/{run_id}:
+    get:
+      tags:
+      - 趋势分析
+      summary: 查看一轮已保存的逐日分析结果
+      description: 按股票和批次编号读取快照；不联网、不重算，也不修改数据库。
+      operationId: get_analysis_run_stocks__stock_id__analysis_runs__run_id__get
+      parameters:
+      - name: stock_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Stock Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunDetailResponse'
+        '422':
+          description: 请求参数不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '404':
+          description: 分析批次不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+components:
+  schemas:
+    APIResponse:
+      properties:
+        code:
+          type: integer
+          title: HTTP 状态码
+        message:
+          type: string
+          title: 错误信息
+        errors:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ValidationIssue'
+            type: array
+          - type: 'null'
+          title: 参数校验问题
+      type: object
+      required:
+      - code
+      - message
+      title: 错误响应
+      description: 统一的 API 错误响应。
+    AnalysisResultItem:
+      properties:
+        trade_date:
+          type: string
+          format: date
+          title: Trade Date
+        close_price:
+          type: string
+          title: Close Price
+        ma5:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ma5
+        ma20:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ma20
+        rsi14:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rsi14
+        macd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Macd
+        trend_score:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Trend Score
+        trend_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trend Label
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+      type: object
+      required:
+      - trade_date
+      - close_price
+      - ma5
+      - ma20
+      - rsi14
+      - macd
+      - trend_score
+      - trend_label
+      - summary
+      title: AnalysisResultItem
+      description: 一轮分析中的一天；历史不足时，尚未算出的指标保持为空。
+    AnalysisRunDetailResponse:
+      properties:
+        run_id:
+          type: integer
+          title: Run Id
+        stock_id:
+          type: integer
+          title: Stock Id
+        symbol:
+          type: string
+          title: Symbol
+        market:
+          type: string
+          title: Market
+        requested_days:
+          type: integer
+          title: Requested Days
+        start_date:
+          type: string
+          format: date
+          title: Start Date
+        end_date:
+          type: string
+          format: date
+          title: End Date
+        source:
+          type: string
+          title: Source
+        adjustment:
+          type: string
+          title: Adjustment
+        rule_version:
+          type: string
+          title: Rule Version
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+        saved:
+          type: integer
+          title: Saved
+        items:
+          items:
+            $ref: '#/components/schemas/AnalysisResultItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - run_id
+      - stock_id
+      - symbol
+      - market
+      - requested_days
+      - start_date
+      - end_date
+      - source
+      - adjustment
+      - rule_version
+      - computed_at
+      - saved
+      - items
+      title: AnalysisRunDetailResponse
+      description: 已保存分析批次及其全部逐日结果，不包含重新计算的内容。
+    AnalysisRunListItem:
+      properties:
+        run_id:
+          type: integer
+          title: Run Id
+        requested_days:
+          type: integer
+          title: Requested Days
+        start_date:
+          type: string
+          format: date
+          title: Start Date
+        end_date:
+          type: string
+          format: date
+          title: End Date
+        source:
+          type: string
+          title: Source
+        adjustment:
+          type: string
+          title: Adjustment
+        rule_version:
+          type: string
+          title: Rule Version
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+      type: object
+      required:
+      - run_id
+      - requested_days
+      - start_date
+      - end_date
+      - source
+      - adjustment
+      - rule_version
+      - computed_at
+      title: AnalysisRunListItem
+      description: 列表只显示辨认一轮分析所需的信息，不带每日指标。
+    AnalysisRunListResponse:
+      properties:
+        stock_id:
+          type: integer
+          title: Stock Id
+        symbol:
+          type: string
+          title: Symbol
+        market:
+          type: string
+          title: Market
+        items:
+          items:
+            $ref: '#/components/schemas/AnalysisRunListItem'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+      type: object
+      required:
+      - stock_id
+      - symbol
+      - market
+      - items
+      - total
+      - page
+      - page_size
+      title: AnalysisRunListResponse
+      description: 股票身份、当前页批次及总条数。
+    AnalysisRunRequest:
+      properties:
+        days:
+          type: integer
+          maximum: 260.0
+          minimum: 35.0
+          title: Days
+          description: 最近多少条已存日线
+          default: 90
+      type: object
+      title: AnalysisRunRequest
+      description: days 是参与计算的交易日条数，不只是页面显示的条数。
+    AnalysisRunResponse:
+      properties:
+        run_id:
+          type: integer
+          title: Run Id
+        stock_id:
+          type: integer
+          title: Stock Id
+        symbol:
+          type: string
+          title: Symbol
+        requested_days:
+          type: integer
+          title: Requested Days
+        start_date:
+          type: string
+          format: date
+          title: Start Date
+        end_date:
+          type: string
+          format: date
+          title: End Date
+        source:
+          type: string
+          title: Source
+        adjustment:
+          type: string
+          title: Adjustment
+        rule_version:
+          type: string
+          title: Rule Version
+        saved:
+          type: integer
+          title: Saved
+        latest:
+          $ref: '#/components/schemas/LatestAnalysis'
+      type: object
+      required:
+      - run_id
+      - stock_id
+      - symbol
+      - requested_days
+      - start_date
+      - end_date
+      - source
+      - adjustment
+      - rule_version
+      - saved
+      - latest
+      title: AnalysisRunResponse
+      description: 同时给出批次身份、输入范围和最新一天的结果。
+    DailyPriceItem:
+      properties:
+        trade_date:
+          type: string
+          format: date
+          title: Trade Date
+        open_price:
+          type: string
+          title: Open Price
+        high_price:
+          type: string
+          title: High Price
+        low_price:
+          type: string
+          title: Low Price
+        close_price:
+          type: string
+          title: Close Price
+        volume:
+          type: integer
+          title: Volume
+        currency:
+          type: string
+          title: Currency
+        source:
+          type: string
+          title: Source
+        adjustment:
+          type: string
+          title: Adjustment
+      type: object
+      required:
+      - trade_date
+      - open_price
+      - high_price
+      - low_price
+      - close_price
+      - volume
+      - currency
+      - source
+      - adjustment
+      title: DailyPriceItem
+      description: 一条已入库日线；价格在 JSON 中以字符串保留十进制精度。
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          const: ok
+          title: 状态
+      type: object
+      required:
+      - status
+      title: 健康检查响应
+      description: 健康检查响应。
+    HomeResponse:
+      properties:
+        name:
+          type: string
+          title: 服务名称
+        docs:
+          type: string
+          title: 接口文档地址
+        health:
+          type: string
+          title: 健康检查地址
+      type: object
+      required:
+      - name
+      - docs
+      - health
+      title: 首页响应
+      description: 首页响应；只列出服务名称和可访问的入口地址。
+    LatestAnalysis:
+      properties:
+        trade_date:
+          type: string
+          format: date
+          title: Trade Date
+        close_price:
+          type: string
+          title: Close Price
+        ma5:
+          type: string
+          title: Ma5
+        ma20:
+          type: string
+          title: Ma20
+        rsi14:
+          type: string
+          title: Rsi14
+        macd:
+          type: string
+          title: Macd
+        trend_score:
+          type: integer
+          title: Trend Score
+        trend_label:
+          type: string
+          title: Trend Label
+        summary:
+          type: string
+          title: Summary
+      type: object
+      required:
+      - trade_date
+      - close_price
+      - ma5
+      - ma20
+      - rsi14
+      - macd
+      - trend_score
+      - trend_label
+      - summary
+      title: LatestAnalysis
+      description: 这一轮分析最后一个交易日的指标与评分。
+    PriceCollectionResponse:
+      properties:
+        stock_id:
+          type: integer
+          title: Stock Id
+        symbol:
+          type: string
+          title: Symbol
+        inserted:
+          type: integer
+          title: Inserted
+        updated:
+          type: integer
+          title: Updated
+        unchanged:
+          type: integer
+          title: Unchanged
+      type: object
+      required:
+      - stock_id
+      - symbol
+      - inserted
+      - updated
+      - unchanged
+      title: PriceCollectionResponse
+      description: 分别告诉调用方多少天被新增、修正或保持原样。
+    PriceHistoryResponse:
+      properties:
+        stock_id:
+          type: integer
+          title: Stock Id
+        symbol:
+          type: string
+          title: Symbol
+        market:
+          type: string
+          enum:
+          - CN
+          - US
+          title: Market
+        items:
+          items:
+            $ref: '#/components/schemas/DailyPriceItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - stock_id
+      - symbol
+      - market
+      - items
+      title: PriceHistoryResponse
+      description: 股票身份和最近的已存日线；未采集时 items 是空数组。
+    StockArchiveResponse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        symbol:
+          type: string
+          title: Symbol
+        status:
+          type: string
+          const: archived
+          title: Status
+      type: object
+      required:
+      - id
+      - symbol
+      - status
+      title: StockArchiveResponse
+      description: 归档成功后告诉调用方：哪只股票已处于归档状态。
+    StockCandidateResponse:
+      properties:
+        symbol:
+          type: string
+          title: Symbol
+        name:
+          type: string
+          title: Name
+        market:
+          type: string
+          enum:
+          - CN
+          - US
+          title: Market
+        exchange:
+          type: string
+          title: Exchange
+      type: object
+      required:
+      - symbol
+      - name
+      - market
+      - exchange
+      title: StockCandidateResponse
+      description: 外部目录中的候选项，还没有本地 stocks.id。
+    StockCreate:
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Symbol
+          description: 股票代码
+        name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Name
+          description: 旧版可选字段；即使填写，保存时也以股票目录中的名称为准
+          deprecated: true
+        market:
+          type: string
+          enum:
+          - CN
+          - US
+          title: Market
+          description: 股票市场
+      type: object
+      required:
+      - symbol
+      - market
+      title: StockCreate
+      description: 用户提交代码和市场；名称由服务端从股票目录重新核对。
+    StockListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/StockResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      title: StockListResponse
+      description: 同时返回当前页股票和总条数，供前端计算页数。
+    StockResponse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        symbol:
+          type: string
+          title: Symbol
+        name:
+          type: string
+          title: Name
+        market:
+          type: string
+          enum:
+          - CN
+          - US
+          title: Market
+      type: object
+      required:
+      - id
+      - symbol
+      - name
+      - market
+      title: StockResponse
+      description: 新增与列表共用的股票编号和基础信息。
+    StockRestoreResponse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        symbol:
+          type: string
+          title: Symbol
+        status:
+          type: string
+          const: active
+          title: Status
+      type: object
+      required:
+      - id
+      - symbol
+      - status
+      title: StockRestoreResponse
+      description: 恢复成功后告诉调用方：哪只股票已回到正常状态。
+    StockSearchResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/StockCandidateResponse'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: StockSearchResponse
+      description: 候选项列表；没有匹配时 items 是空数组。
+    ValidationIssue:
+      properties:
+        field:
+          type: string
+          title: 字段
+        message:
+          type: string
+          title: 问题
+      type: object
+      required:
+      - field
+      - message
+      title: ValidationIssue
+      description: 请求参数校验问题。

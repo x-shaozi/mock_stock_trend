@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest>=8,<10
+ruff>=0.8,<1
+PyYAML>=6,<7
+# Alembic 管理数据库表结构版本；范围限定在兼容的 1.x 系列。
+alembic>=1.16,<2
