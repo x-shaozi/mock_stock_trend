@@ -2,6 +2,8 @@ fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 sqlalchemy[asyncio]>=2.0,<2.1
 asyncmy>=0.2,<1
+# MySQL 8 使用 caching_sha2_password 登录时，asyncmy 需要此库完成加密认证。
+cryptography>=50,<51
 pydantic-settings>=2,<3
 redis>=5,<9
 loguru>=0.7,<1

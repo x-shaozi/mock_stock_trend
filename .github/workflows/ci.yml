@@ -12,6 +12,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # 一个版本失败时，另一个版本仍继续运行，便于分别定位问题。
+      fail-fast: false
       matrix:
         python-version: ['3.11', '3.14']
     # 每个 Python 版本各启动一个临时 MySQL；这里不连接本机学习库。
