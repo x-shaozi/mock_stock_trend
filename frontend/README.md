@@ -1,6 +1,6 @@
 # Stock Trend Lab · Vue 前端（S0）
 
-本目录是基于 **mock_stock_trend P1 已验收接口**设计的前端工程起点。S0 只有基础导航、三态主题切换、统一 Axios 层、HTTP 健康检查以及预留路由；尚无股票业务页面。2026-11-15 已完成本地安装、自动检查、构建和浏览器联调；远程 CI 与用户手动验收仍待核对。
+本目录是基于 **mock_stock_trend P1 已验收接口**设计的前端工程起点。S0 只有基础导航、三态主题切换、统一 Axios 层、HTTP 健康检查以及预留路由；尚无股票业务页面。2026-11-15 已完成本地安装、自动检查、构建、浏览器联调、用户手动验收和远程 CI。
 
 ## 放置方式
 
@@ -41,6 +41,6 @@ pnpm build
 
 - `/health` 只验证 HTTP 进程，不保证 MySQL / Redis 可用。
 - S0 占位路由不表示股票业务已完成。
-- `pnpm-lock.yaml` 已生成；仓库 CI 已配置前端检查，需在文件推送到 GitHub 后核对远程运行结果。
+- `pnpm-lock.yaml` 已生成；仓库 CI 已通过[首次前端运行](https://github.com/x-shaozi/mock_stock_trend/actions/runs/43655968226)。
 - 本地构建通过，但 Vite 提示首包超过 500 kB；S1 引入真实页面时应按路由拆分代码。
 - 公开部署前仍需完成认证、权限、限流、HTTPS、行情数据授权等工作。

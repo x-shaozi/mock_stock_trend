@@ -16,4 +16,5 @@
 - 已在本项目中安装 pnpm 10.0.0 声明的依赖并生成锁文件；锁文件重复安装通过。
 - OpenAPI 类型生成、TypeScript 类型检查、ESLint、Prettier、3 个 Vitest 测试和 Vite 构建均已运行；ESLint 有 21 条排版警告，构建有首包体积警告。
 - 浏览器中已核对本地代理健康检查、占位路由、主题切换和窄屏布局。
-- 已配置前端 CI；用户手动复核和 GitHub 远程结果仍待完成。
+- 用户第一次验收时前后端服务已停止；重新启动后，用户确认页面和操作正常。
+- [GitHub Actions 首次前端运行](https://github.com/x-shaozi/mock_stock_trend/actions/runs/43655968226)通过；S0 验收完成。
