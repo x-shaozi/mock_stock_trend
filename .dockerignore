@@ -1,0 +1,35 @@
+# 本地配置与密钥
+.env
+.env.*
+**/.env
+**/.env.*
+
+# 版本管理与编辑器文件
+.git
+.github
+.idea
+.jbeval
+
+# Python 虚拟环境与缓存
+.venv
+.uv-cache
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.coverage
+.coverage.*
+
+# 前端依赖与生成产物
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+
+# 本地临时文件
+**/*.log
+**/*.local
+**/.DS_Store

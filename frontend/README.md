@@ -1,46 +1,70 @@
-# Stock Trend Lab · Vue 前端（S0）
+# Stock Trend Lab · Vue 前端
 
-本目录是基于 **mock_stock_trend P1 已验收接口**设计的前端工程起点。S0 只有基础导航、三态主题切换、统一 Axios 层、HTTP 健康检查以及预留路由；尚无股票业务页面。2026-11-15 已完成本地安装、自动检查、构建、浏览器联调、用户手动验收和远程 CI。
+前端使用 Vue 3、TypeScript、Vite、Vue Router、Element Plus 和 Axios。S0 工程骨架已验收；S1 股票追踪的核心流程已通过手动验收，异常与边界场景仍需补测。S2 股票详情、日线采集及服务异常的核心流程已通过手动验收。S3 趋势分析已接入，主要流程已通过自动检查和手动验收；剩余边界场景见下方验收记录。
 
-## 放置方式
+## 已接入的页面
 
-将本 `frontend/` 复制到已验收后端的仓库根目录（与 `app/`、`docs/` 同级），不要替换现有后端文件。脚本 `pnpm gen:api` 读取相邻的 `../docs/openapi.yaml`。
+- `/stocks`：正常追踪股票的列表，支持市场、关键词和分页筛选；条件保存在 URL 中。
+- `/stocks/add`：按代码或名称搜索外部股票目录，再选择股票加入追踪。
+- `/stocks/archived`：查看已归档股票并恢复追踪。
+- `/stocks/:stockId`：股票详情、已保存日线图表与手动采集。
 
-## Windows / PowerShell 快速启动
+股票接口由 `src/features/stocks/api.ts` 调用，统一使用 `src/api/http.ts` 中的 Axios 客户端。请求和响应类型以 `../docs/openapi.yaml` 生成的 `src/api/generated/schema.d.ts` 为准，不手工修改生成文件。
 
-后端继续用 PyCharm 从仓库根目录运行 `python -m app.main`，确认 `http://127.0.0.1:18000/health` 返回 `{"status":"ok"}`。前端在 VS Code 中打开 `frontend/`，运行：
+## 本机启动
+
+先在项目根目录启动后端：
 
 ```powershell
-# Node.js 22.12+；Corepack 会读取 package.json 指定的 pnpm 10.0.0。
+.venv\Scripts\python -m app.main
+```
+
+这个命令让后端监听 `127.0.0.1:18000`。另开一个终端，进入 `frontend/` 后运行：
+
+```powershell
 corepack pnpm install --frozen-lockfile
 corepack pnpm gen:api
 corepack pnpm dev
 ```
 
-浏览器访问 `http://127.0.0.1:5173`。如果系统没有 Corepack，可按照 pnpm 官方文档安装 pnpm 10.0.0。`--frozen-lockfile` 表示严格使用已提交的 `pnpm-lock.yaml`，依赖声明与锁文件不一致时安装会失败。
+`corepack pnpm` 使用 `package.json` 指定的 pnpm 10.0.0；`--frozen-lockfile` 要求依赖与已提交的锁文件一致；`gen:api` 根据后端 OpenAPI 文档生成 TypeScript 类型；`dev` 启动本机前端。浏览器打开 `http://127.0.0.1:5173/`。
 
-## 接口与代理
+开发时，浏览器对 `/api/*` 的请求由 Vite 转发到本机后端。`/api/health` 仅说明后端 HTTP 进程可访问，不代表数据库或 Redis 已检查通过。
 
-- 浏览器访问 `/api/health`，Vite 转发到 `http://127.0.0.1:18000/health`。
-- `src/api/http.ts` 统一处理网络失败和 P1 可选 `error_code`。
-- 成功响应使用 FastAPI 业务 Schema，**没有**额外 `{ data: ... }` 包装。
-- OpenAPI 类型生成：`pnpm gen:api`。后续业务 API 使用 `src/api/generated/schema.d.ts`，不得手动篡改。
-- Vite 代理只用于开发。部署时由 Nginx/网关配置同源 `/api` 反向代理与前端路由回退。
+## 可选：局域网调试
 
-## 命令
+只有在确实需要让同一可信局域网中的其他设备查看开发页面时，才在 `frontend/` 运行：
 
 ```powershell
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm format:check
-pnpm build
+corepack pnpm dev:lan
 ```
 
-## 注意
+该命令让 Vite 监听 `0.0.0.0:5173`。其他设备使用开发电脑的局域网 IPv4 地址访问，例如 `http://<开发电脑IPv4>:5173/`。Vite 的 `/api` 代理也会对这些设备生效，因此它们能够调用后端管理接口；在完成鉴权和权限控制之前，不要在不可信网络或面向多人时使用。不要开放 MySQL、Redis 或后端 18000 端口，也不要把密钥放入 `VITE_*` 环境变量。此模式只是开发调试方式，不是部署方式。
 
-- `/health` 只验证 HTTP 进程，不保证 MySQL / Redis 可用。
-- S0 占位路由不表示股票业务已完成。
-- `pnpm-lock.yaml` 已生成；仓库 CI 已通过[首次前端运行](https://github.com/x-shaozi/mock_stock_trend/actions/runs/43655968226)。
-- 本地构建通过，但 Vite 提示首包超过 500 kB；S1 引入真实页面时应按路由拆分代码。
-- 公开部署前仍需完成认证、权限、限流、HTTPS、行情数据授权等工作。
+## 质量检查
+
+在 `frontend/` 执行：
+
+```powershell
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm format:check
+corepack pnpm build
+```
+
+这些命令依次检查代码规则、TypeScript 类型、单元测试、格式和正式构建。仓库 CI 也运行相同的前端检查。S1 的运行与手动验收结果记录在[前端开发计划](../docs/frontend/03-开发计划与验收标准.md)。
+
+成功响应直接使用后端业务结构，没有通用 `data` 外壳；失败时优先展示 `error_code` 对应的业务提示或后端 `message`。`POST /stocks` 只提交市场和代码，股票名称由后端重新核对。归档前会弹出确认框，归档或恢复后重新请求列表。
+
+## S2：日线详情与异常提示
+
+`/stocks/:stockId` 显示股票信息、已保存的日线 K 线和成交量。用户可手动发起采集；采集成功后，页面重新请求已保存日线。采集请求不会自动重试，超时后应先刷新行情，确认服务器是否已写入数据。
+
+股票详情和已保存日线的 GET 请求只在网络、超时或无业务错误码的代理错误时有限重试。图表绘制时才把价格字符串转为数字；交易日期不做时区换算。详细操作与验收项见[S2 开发与验收说明](../docs/04-S2开发与验收说明.md)。
+
+## S3：趋势分析与历史快照
+
+股票详情页在采集区域下方增加独立的“分析条数”和已保存批次列表。运行分析会把 `days` 放进 JSON 请求体；新建返回 201，同条件重算返回 200。分析 POST 不自动重试，断线或超时后先刷新批次列表确认结果。
+
+从批次列表打开 `/stocks/:stockId/analysis/:runId` 可查看后端保存的逐日指标。图表展示收盘价与 MA5/MA20、RSI14、MACD 柱值，空指标保持为空；交易日期不转换时区，计算时间按浏览器本地时间显示。归档股票仍可查看历史批次，但不能运行新分析。详细结果和未手测范围见 [S3 开发与验收说明](../docs/05-S3开发与验收说明.md)。

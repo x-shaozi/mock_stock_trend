@@ -31,7 +31,11 @@ onMounted(async () => {
         <h1>{{ title }}</h1>
         <p class="muted">{{ description }}</p>
       </div>
-      <el-tag type="info" effect="plain">工程骨架</el-tag>
+      <el-tag
+        type="info"
+        effect="plain"
+        >工程骨架</el-tag
+      >
     </div>
     <div class="panel section-card">
       <h2>前后端连接检查</h2>

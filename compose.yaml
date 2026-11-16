@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?请设置 MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?请设置 MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请设置 MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: ${MYSQL_USER:?请设置 MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请设置 MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?请设置 MYSQL_DATABASE}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+    ports:
+      - "127.0.0.1:18000:18000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
